@@ -11,7 +11,7 @@ services:
     environment:
       - CI=true
     working_dir: /app
-    command: npm run test
+    command: yarn test
 
   playwright-ui:
     build:
@@ -26,7 +26,7 @@ services:
     environment:
       - CI=false
     working_dir: /app
-    command: npm run test:ui -- --host=0.0.0.0
+    command: yarn test:ui -- --host=0.0.0.0
 
   dev:
     build:
@@ -38,4 +38,4 @@ services:
     ports:
       - "3000:3000"
     working_dir: /app
-    command: npm run dev
+    command: yarn dev
