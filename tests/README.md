@@ -61,7 +61,39 @@ To run tests with UI mode using Docker:
 npm run test:docker:ui
 ```
 
+To clean up test results and reports:
+```bash
+npm run test:docker:clean
+```
+
+#### Cross-platform Helper Scripts
+
+For easier Docker usage, you can use the provided helper scripts:
+
+**Unix/Linux/macOS:**
+```bash
+./scripts/docker-test.sh test        # Run tests
+./scripts/docker-test.sh test-ui     # Run tests with UI
+./scripts/docker-test.sh clean       # Clean test artifacts
+./scripts/docker-test.sh build       # Build Docker image
+```
+
+**Windows:**
+```cmd
+scripts\docker-test.bat test         # Run tests
+scripts\docker-test.bat test-ui      # Run tests with UI
+scripts\docker-test.bat clean        # Clean test artifacts
+scripts\docker-test.bat build        # Build Docker image
+```
+
 The UI will be available at `http://localhost:9323` when using Docker.
+
+#### Permission Handling
+
+The Docker setup automatically handles file permissions by:
+- Mapping your host user ID to the container user
+- Ensuring test results are created with proper ownership
+- Allowing clean deletion of test artifacts without permission errors
 
 ## Test Structure
 

@@ -12,9 +12,10 @@
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:debug": "playwright test --debug",
-    "test:docker": "docker compose -f docker-compose.playwright.yml run --rm playwright",
-    "test:docker:ui": "docker compose -f docker-compose.playwright.yml up playwright-ui",
-    "test:docker:build": "docker compose -f docker-compose.playwright.yml build"
+    "test:docker": "USER_ID=$(id -u) GROUP_ID=$(id -g) docker compose -f docker-compose.playwright.yml run --rm playwright",
+    "test:docker:ui": "USER_ID=$(id -u) GROUP_ID=$(id -g) docker compose -f docker-compose.playwright.yml up playwright-ui",
+    "test:docker:build": "USER_ID=$(id -u) GROUP_ID=$(id -g) docker compose -f docker-compose.playwright.yml build",
+    "test:docker:clean": "USER_ID=$(id -u) GROUP_ID=$(id -g) docker compose -f docker-compose.playwright.yml run --rm playwright sh -c 'rm -rf test-results/ playwright-report/'"
   },
   "dependencies": {
     "@remix-run/node": "^2.16.8",

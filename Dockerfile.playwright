@@ -4,14 +4,34 @@ FROM mcr.microsoft.com/playwright:v1.53.0-noble
 # Set working directory
 WORKDIR /app
 
+# Accept build arguments for user ID and group ID
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+
+# Create a user with proper permissions
+RUN if [ "$USER_ID" != "1000" ] || [ "$GROUP_ID" != "1000" ]; then \
+        # Only create new user if not using defaults
+        groupadd -g ${GROUP_ID} hostgroup 2>/dev/null || true && \
+        useradd -m -u ${USER_ID} -g ${GROUP_ID} -s /bin/bash hostuser 2>/dev/null || \
+        (id ${USER_ID} >/dev/null 2>&1 && usermod -u ${USER_ID} -g ${GROUP_ID} $(id -nu ${USER_ID}) 2>/dev/null || true); \
+    fi
+
 # Copy package files first for better caching
 COPY package*.json ./
 
-# Install dependencies
-RUN yarn install
+# Install dependencies as root (needed for node_modules creation)
+RUN npm install
 
 # Copy source code
 COPY . .
+
+# Change ownership of the app directory to the specified user
+RUN if [ "$USER_ID" != "1000" ] || [ "$GROUP_ID" != "1000" ]; then \
+        chown -R ${USER_ID}:${GROUP_ID} /app; \
+    fi
+
+# Switch to the specified user
+USER ${USER_ID}:${GROUP_ID}
 
 # Expose port for dev server
 EXPOSE 3000

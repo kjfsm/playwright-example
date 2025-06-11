@@ -3,6 +3,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.playwright
+      args:
+        USER_ID: ${USER_ID:-1000}
+        GROUP_ID: ${GROUP_ID:-1000}
     volumes:
       - .:/app
       - /app/node_modules
@@ -11,12 +14,15 @@ services:
     environment:
       - CI=true
     working_dir: /app
-    command: yarn test
+    command: npm run test
 
   playwright-ui:
     build:
       context: .
       dockerfile: Dockerfile.playwright
+      args:
+        USER_ID: ${USER_ID:-1000}
+        GROUP_ID: ${GROUP_ID:-1000}
     volumes:
       - .:/app
       - /app/node_modules
@@ -26,16 +32,19 @@ services:
     environment:
       - CI=false
     working_dir: /app
-    command: yarn test:ui -- --host=0.0.0.0
+    command: npm run test:ui -- --host=0.0.0.0
 
   dev:
     build:
       context: .
       dockerfile: Dockerfile.playwright
+      args:
+        USER_ID: ${USER_ID:-1000}
+        GROUP_ID: ${GROUP_ID:-1000}
     volumes:
       - .:/app
       - /app/node_modules
     ports:
       - "3000:3000"
     working_dir: /app
-    command: yarn dev
+    command: npm run dev
