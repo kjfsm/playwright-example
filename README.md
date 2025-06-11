@@ -10,6 +10,23 @@ Run the dev server:
 npm run dev
 ```
 
+## Testing
+
+This project includes end-to-end tests using Playwright:
+
+```sh
+# Install Playwright browsers (required for first run)
+npx playwright install
+
+# Run tests
+npm run test
+
+# Run tests with UI
+npm run test:ui
+```
+
+See `tests/README.md` for detailed testing documentation.
+
 ## Deployment
 
 First, build your app for production:
