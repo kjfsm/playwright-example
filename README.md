@@ -12,8 +12,9 @@ npm run dev
 
 ## Testing
 
-This project includes end-to-end tests using Playwright:
+This project includes end-to-end tests using Playwright with two setup options:
 
+### Local Setup
 ```sh
 # Install Playwright browsers (required for first run)
 npx playwright install
@@ -24,6 +25,20 @@ npm run test
 # Run tests with UI
 npm run test:ui
 ```
+
+### Docker Setup (Recommended)
+```sh
+# Build Docker image (no browser installation needed)
+npm run test:docker:build
+
+# Run tests with Docker
+npm run test:docker
+
+# Run tests with UI using Docker
+npm run test:docker:ui
+```
+
+The Docker approach eliminates the need to install browsers locally and ensures consistent test environments.
 
 See `tests/README.md` for detailed testing documentation.
 

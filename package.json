@@ -11,7 +11,10 @@
     "typecheck": "tsc",
     "test": "playwright test",
     "test:ui": "playwright test --ui",
-    "test:debug": "playwright test --debug"
+    "test:debug": "playwright test --debug",
+    "test:docker": "docker compose -f docker-compose.playwright.yml run --rm playwright",
+    "test:docker:ui": "docker compose -f docker-compose.playwright.yml up playwright-ui",
+    "test:docker:build": "docker compose -f docker-compose.playwright.yml build"
   },
   "dependencies": {
     "@remix-run/node": "^2.16.8",
