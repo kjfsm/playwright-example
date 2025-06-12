@@ -1,0 +1,393 @@
+# Copilot Setup Steps - Playwright Testing Environment
+
+project_type: "remix-playwright-testing"
+description: "Complete setup for Remix application with Playwright end-to-end testing using Docker"
+tech_stack:
+  - "Remix"
+  - "Playwright" 
+  - "Docker"
+  - "TypeScript"
+  - "Node.js"
+
+prerequisites:
+  - name: "Node.js"
+    version: ">=20.0.0"
+    check_command: "node --version"
+  - name: "Docker"
+    version: ">=20.0.0"
+    check_command: "docker --version"
+  - name: "Docker Compose"
+    version: ">=2.0.0"
+    check_command: "docker compose version"
+
+setup_steps:
+  - step: 1
+    name: "Project Initialization"
+    description: "Set up basic Remix project structure"
+    commands:
+      - "npm install"
+      - "npm run typecheck"
+    validation:
+      - "package.json exists"
+      - "TypeScript compilation succeeds"
+
+  - step: 2
+    name: "Install Playwright"
+    description: "Add Playwright as development dependency"
+    commands:
+      - "npm install --save-dev @playwright/test@^1.53.0"
+    files_created:
+      - "node_modules/@playwright/test"
+    validation:
+      - "Playwright dependency in package.json"
+
+  - step: 3
+    name: "Create Playwright Configuration"
+    description: "Set up Playwright configuration for Remix"
+    files_to_create:
+      - path: "playwright.config.ts"
+        content: |
+          import { defineConfig, devices } from '@playwright/test';
+          
+          export default defineConfig({
+            testDir: './tests',
+            fullyParallel: true,
+            forbidOnly: !!process.env.CI,
+            retries: process.env.CI ? 2 : 0,
+            workers: process.env.CI ? 1 : undefined,
+            reporter: 'html',
+            use: {
+              baseURL: 'http://localhost:3000',
+              trace: 'on-first-retry',
+            },
+            projects: [
+              {
+                name: 'chromium',
+                use: { ...devices['Desktop Chrome'] },
+              },
+            ],
+            webServer: {
+              command: 'yarn dev',
+              url: 'http://localhost:3000',
+              reuseExistingServer: !process.env.CI,
+              timeout: 120 * 1000,
+            },
+          });
+
+  - step: 4
+    name: "Create Test Scripts"
+    description: "Add testing scripts to package.json"
+    package_json_scripts:
+      test: "playwright test"
+      test:ui: "playwright test --ui"
+      test:debug: "playwright test --debug"
+      test:docker: "USER_ID=$(id -u) GROUP_ID=$(id -g) docker compose -f docker-compose.playwright.yml run --rm playwright"
+      test:docker:ui: "USER_ID=$(id -u) GROUP_ID=$(id -g) docker compose -f docker-compose.playwright.yml up playwright-ui"
+      test:docker:build: "USER_ID=$(id -u) GROUP_ID=$(id -g) docker compose -f docker-compose.playwright.yml build"
+      test:docker:clean: "USER_ID=$(id -u) GROUP_ID=$(id -g) docker compose -f docker-compose.playwright.yml run --rm playwright sh -c 'rm -rf test-results/ playwright-report/'"
+
+  - step: 5
+    name: "Create Docker Configuration"
+    description: "Set up Docker-based testing environment"
+    files_to_create:
+      - path: "Dockerfile.playwright"
+        content: |
+          FROM mcr.microsoft.com/playwright:v1.53.0-noble
+          
+          WORKDIR /app
+          
+          ARG USER_ID=1000
+          ARG GROUP_ID=1000
+          
+          RUN if [ "$USER_ID" != "1000" ] || [ "$GROUP_ID" != "1000" ]; then \
+                  groupadd -g ${GROUP_ID} hostgroup 2>/dev/null || true && \
+                  useradd -m -u ${USER_ID} -g ${GROUP_ID} -s /bin/bash hostuser 2>/dev/null || \
+                  (id ${USER_ID} >/dev/null 2>&1 && usermod -u ${USER_ID} -g ${GROUP_ID} $(id -nu ${USER_ID}) 2>/dev/null || true); \
+              fi
+          
+          COPY package*.json ./
+          RUN npm install
+          COPY . .
+          
+          RUN if [ "$USER_ID" != "1000" ] || [ "$GROUP_ID" != "1000" ]; then \
+                  chown -R ${USER_ID}:${GROUP_ID} /app; \
+              fi
+          
+          USER ${USER_ID}:${GROUP_ID}
+          EXPOSE 3000
+          CMD ["npm", "run", "test"]
+
+      - path: "docker-compose.playwright.yml"
+        content: |
+          services:
+            playwright:
+              build:
+                context: .
+                dockerfile: Dockerfile.playwright
+                args:
+                  USER_ID: ${USER_ID:-1000}
+                  GROUP_ID: ${GROUP_ID:-1000}
+              volumes:
+                - .:/app
+                - /app/node_modules
+              ports:
+                - "3000:3000"
+              environment:
+                - CI=true
+              working_dir: /app
+              command: npm run test
+          
+            playwright-ui:
+              build:
+                context: .
+                dockerfile: Dockerfile.playwright
+                args:
+                  USER_ID: ${USER_ID:-1000}
+                  GROUP_ID: ${GROUP_ID:-1000}
+              volumes:
+                - .:/app
+                - /app/node_modules
+              ports:
+                - "3000:3000"
+                - "9323:9323"
+              environment:
+                - CI=false
+              working_dir: /app
+              command: npm run test:ui -- --host=0.0.0.0
+
+  - step: 6
+    name: "Create Helper Scripts"
+    description: "Cross-platform scripts for easier Docker testing"
+    files_to_create:
+      - path: "scripts/docker-test.sh"
+        executable: true
+        content: |
+          #!/bin/bash
+          set -e
+          
+          if command -v id >/dev/null 2>&1; then
+              USER_ID=$(id -u)
+              GROUP_ID=$(id -g)
+          else
+              USER_ID=1000
+              GROUP_ID=1000
+              echo "Warning: 'id' command not found. Using default USER_ID=1000 GROUP_ID=1000"
+          fi
+          
+          export USER_ID
+          export GROUP_ID
+          
+          COMMAND=${1:-test}
+          
+          case $COMMAND in
+              "test")
+                  echo "Running Playwright tests in Docker..."
+                  docker compose -f docker-compose.playwright.yml run --rm playwright
+                  ;;
+              "test-ui")
+                  echo "Running Playwright tests with UI in Docker..."
+                  echo "Open http://localhost:9323 in your browser"
+                  docker compose -f docker-compose.playwright.yml up playwright-ui
+                  ;;
+              "build")
+                  echo "Building Playwright Docker image..."
+                  docker compose -f docker-compose.playwright.yml build
+                  ;;
+              "clean")
+                  echo "Cleaning test results and reports..."
+                  docker compose -f docker-compose.playwright.yml run --rm playwright sh -c 'rm -rf test-results/ playwright-report/'
+                  echo "Clean completed."
+                  ;;
+              *)
+                  echo "Usage: $0 [test|test-ui|build|clean]"
+                  exit 1
+                  ;;
+          esac
+
+      - path: "scripts/docker-test.bat"
+        content: |
+          @echo off
+          setlocal
+          
+          set COMMAND=%1
+          if "%COMMAND%"=="" set COMMAND=test
+          
+          if "%COMMAND%"=="test" (
+              echo Running Playwright tests in Docker...
+              docker compose -f docker-compose.playwright.yml run --rm playwright
+          ) else if "%COMMAND%"=="test-ui" (
+              echo Running Playwright tests with UI in Docker...
+              echo Open http://localhost:9323 in your browser
+              docker compose -f docker-compose.playwright.yml up playwright-ui
+          ) else if "%COMMAND%"=="build" (
+              echo Building Playwright Docker image...
+              docker compose -f docker-compose.playwright.yml build
+          ) else if "%COMMAND%"=="clean" (
+              echo Cleaning test results and reports...
+              docker compose -f docker-compose.playwright.yml run --rm playwright sh -c "rm -rf test-results/ playwright-report/"
+              echo Clean completed.
+          ) else (
+              echo Usage: %0 [test^|test-ui^|build^|clean]
+              exit /b 1
+          )
+
+  - step: 7
+    name: "Create Initial Tests"
+    description: "Set up basic test suite"
+    files_to_create:
+      - path: "tests/homepage.spec.ts"
+        content: |
+          import { test, expect } from '@playwright/test';
+          
+          test.describe('Homepage', () => {
+            test('should display welcome message', async ({ page }) => {
+              await page.goto('/');
+              
+              // Check for welcome message
+              await expect(page.getByRole('heading', { level: 1 })).toContainText('Welcome');
+              
+              // Ensure no console errors
+              page.on('console', msg => {
+                if (msg.type() === 'error') {
+                  throw new Error(`Console error: ${msg.text()}`);
+                }
+              });
+            });
+          
+            test('should have proper meta tags', async ({ page }) => {
+              await page.goto('/');
+              
+              // Check meta tags
+              await expect(page).toHaveTitle(/Remix/);
+              const metaDescription = page.locator('meta[name="description"]');
+              await expect(metaDescription).toHaveCount(1);
+            });
+          });
+
+      - path: "tests/smoke.spec.ts"
+        content: |
+          import { test, expect } from '@playwright/test';
+          
+          test.describe('Smoke Tests', () => {
+            test('server is running and responsive', async ({ page }) => {
+              const response = await page.goto('/');
+              expect(response?.status()).toBe(200);
+            });
+          
+            test('page loads without errors', async ({ page }) => {
+              let hasError = false;
+              page.on('pageerror', () => {
+                hasError = true;
+              });
+          
+              await page.goto('/');
+              expect(hasError).toBe(false);
+            });
+          });
+
+      - path: "tests/README.md"
+        content: |
+          # Playwright Tests
+          
+          This directory contains end-to-end tests for the Remix application using Playwright.
+          
+          ## Running Tests
+          
+          ### Local Testing
+          ```bash
+          # Install browsers (first time only)
+          npx playwright install
+          
+          # Run tests
+          npm run test
+          
+          # Interactive UI mode
+          npm run test:ui
+          
+          # Debug mode
+          npm run test:debug
+          ```
+          
+          ### Docker Testing (Recommended)
+          ```bash
+          # Build Docker image
+          npm run test:docker:build
+          
+          # Run tests
+          npm run test:docker
+          
+          # UI mode (access via http://localhost:9323)
+          npm run test:docker:ui
+          
+          # Clean up
+          npm run test:docker:clean
+          ```
+          
+          ## Test Structure
+          
+          - `homepage.spec.ts` - Tests for the main landing page
+          - `smoke.spec.ts` - Basic smoke tests for overall functionality
+          
+          ## Configuration
+          
+          Tests are configured in `playwright.config.ts` with:
+          - Automatic dev server startup
+          - CI-optimized settings
+          - HTML reporting
+          - Trace collection on failures
+
+  - step: 8
+    name: "Update .gitignore"
+    description: "Exclude Playwright artifacts from version control"
+    gitignore_additions:
+      - "/test-results/"
+      - "/playwright-report/"
+      - "/playwright/.cache/"
+
+  - step: 9
+    name: "Initial Test Run"
+    description: "Validate setup with initial test execution"
+    commands:
+      - "npm run test:docker:build"
+      - "npm run test:docker"
+    validation:
+      - "Tests execute successfully"
+      - "HTML report generated"
+      - "No permission errors"
+
+verification_commands:
+  - name: "Check Playwright installation"
+    command: "npx playwright --version"
+    expected_output_contains: "1.53"
+
+  - name: "Validate Docker setup"
+    command: "docker compose -f docker-compose.playwright.yml config"
+    expected_exit_code: 0
+
+  - name: "Test script permissions"
+    command: "ls -la scripts/"
+    expected_output_contains: "docker-test"
+
+  - name: "Run smoke test"
+    command: "npm run test:docker"
+    expected_exit_code: 0
+
+troubleshooting:
+  common_issues:
+    - issue: "Permission denied when cleaning Docker artifacts"
+      solution: "Use npm run test:docker:clean instead of manual rm commands"
+      
+    - issue: "Port 3000 already in use"
+      solution: "Stop existing Remix dev server or change port in playwright.config.ts"
+      
+    - issue: "Docker build fails"
+      solution: "Ensure Docker daemon is running and rebuild with npm run test:docker:build"
+      
+    - issue: "Tests fail on CI"
+      solution: "Ensure CI=true environment variable is set for proper retry configuration"
+
+notes:
+  - "Docker approach is recommended for consistent testing environments"
+  - "UI mode provides excellent debugging capabilities"
+  - "Permission handling is automatic but may require Docker restart on some systems"
+  - "Tests run in parallel by default for faster execution"
